@@ -1,0 +1,14 @@
+export const qualifiedName: Record<string, string> = {
+  avg: "Average",
+  rolling_avg: "Rolling Average",
+  std: "Standard Deviation",
+  var: "Variance",
+  dist: "Distribution",
+  med: "Median",
+  pect: "Percentile",
+  min: "Minimum",
+  max: "Maximum",
+  t: "Total",
+  tm: "Time",
+  count: "Count",
+};
