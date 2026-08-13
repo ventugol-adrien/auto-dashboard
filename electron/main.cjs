@@ -71,14 +71,12 @@ const createWindow = () => {
         },
     });
     const dashboardConfig = getDashboardConfig();
-    const metricKey = dashboardConfig?.metricKey ?? getArgument('metric-key');
-    const xAxisKey = dashboardConfig?.xAxisKey ?? getArgument('x-axis-key');
     const filePath = dashboardConfig?.path ?? getArgument('path');
+    const cards = dashboardConfig?.cards ?? [];
     const query = {};
 
-    if (metricKey && xAxisKey && filePath) {
-        query.metricKey = metricKey;
-        query.xAxisKey = xAxisKey;
+    if (cards.length > 0 && filePath) {
+        query.cards = JSON.stringify(cards);
         query.path = filePath;
     }
 

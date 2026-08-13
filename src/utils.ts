@@ -32,12 +32,48 @@ export const rotateColor = (color: string, index: number, total: number) => {
 
 import type { DataRow } from "./interfaces";
 
-export const sortByKey = (key: string) => (left: DataRow, right: DataRow) => {
-  const leftValue = left[key];
-  const rightValue = right[key];
+export const toAxisNumber = (value: number | string) => {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
 
-  if (typeof leftValue !== "number" || !Number.isFinite(leftValue)) return 1;
-  if (typeof rightValue !== "number" || !Number.isFinite(rightValue)) return -1;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : null;
+};
+
+export const formatAxisValue = (value: number | string) => {
+  if (typeof value === "number") {
+    return String(value);
+  }
+
+  const timestamp = toAxisNumber(value);
+  return timestamp === null ? value : new Date(timestamp).toLocaleString();
+};
+
+export const formatAxisTick = (value: number | string) => {
+  if (typeof value === "number") {
+    return String(value);
+  }
+
+  const timestamp = toAxisNumber(value);
+
+  if (timestamp === null) {
+    return value;
+  }
+
+  return new Date(timestamp).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+};
+
+export const sortByKey = (key: string) => (left: DataRow, right: DataRow) => {
+  const leftValue = toAxisNumber(left[key]);
+  const rightValue = toAxisNumber(right[key]);
+
+  if (leftValue === null) return 1;
+  if (rightValue === null) return -1;
 
   return leftValue - rightValue;
 };

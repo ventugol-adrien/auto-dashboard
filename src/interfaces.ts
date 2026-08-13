@@ -8,11 +8,12 @@ export interface Metric {
   color: string;
 }
 
-type ChartType = "line" | "bar";
+export type ChartType = "line" | "bar" | "count" | "value";
 
-export interface ChartTemplate {
-  metricAbbreviation: string;
-  chartType: ChartType;
+export interface ChartRequest {
+  metric: string;
+  xAxisKey?: string;
+  chartType?: ChartType;
 }
 
 export interface ChartDefinition {

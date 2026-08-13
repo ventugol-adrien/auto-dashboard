@@ -1,12 +1,12 @@
 import { useStream } from "./hooks/useStream";
 import { MetricCard } from "./components/MetricsCard";
-import type { DataRow } from "./interfaces";
+import type { ChartRequest, DataRow } from "./interfaces";
 
 const cleanData = (data: DataRow[]) => data;
 
 type MetricCardDefinition = {
-  metricKey: string;
-  xAxisKey: string;
+  dataKey: string;
+  charts: ChartRequest[];
   path: string;
   clean: (data: DataRow[]) => DataRow[];
 };
@@ -21,9 +21,9 @@ const MetricCardFromSource = ({
 
   return (
     <MetricCard
-      metricKey={definition.metricKey}
+      dataKey={definition.dataKey}
       data={data}
-      xAxisKey={definition.xAxisKey}
+      charts={definition.charts}
       source={definition.path}
     />
   );
@@ -34,22 +34,40 @@ export function App() {
   const streamId = import.meta.env.VITE_ID;
   const streamUrl = desktopUri && streamId ? `${desktopUri}/${streamId}` : "";
   const launchParameters = new URLSearchParams(window.location.search);
-  const metricKey = launchParameters.get("metricKey");
-  const xAxisKey = launchParameters.get("xAxisKey");
+  const configuredCards = launchParameters.get("cards");
   const filePath = launchParameters.get("path");
+  const parsedCards = configuredCards
+    ? (JSON.parse(configuredCards) as Array<{
+        dataKey: string;
+        charts: ChartRequest[];
+      }>)
+    : [];
   const metrics: MetricCardDefinition[] =
-    metricKey && xAxisKey && filePath
-      ? [{ metricKey, xAxisKey, path: filePath, clean: cleanData }]
+    parsedCards.length > 0 && filePath
+      ? parsedCards.map(({ dataKey, charts }) => ({
+          dataKey,
+          charts,
+          path: filePath,
+          clean: cleanData,
+        }))
       : [
           {
-            metricKey: "loss",
-            xAxisKey: "step",
+            dataKey: "loss",
+            charts: [
+              { metric: "_", xAxisKey: "step" },
+              { metric: "avg", xAxisKey: "step" },
+              { metric: "rolling_avg", xAxisKey: "step" },
+            ],
             path: "src/assets/data/example.jsonl",
             clean: cleanData,
           },
           {
-            metricKey: "epoch",
-            xAxisKey: "step",
+            dataKey: "epoch",
+            charts: [
+              { metric: "_", xAxisKey: "step" },
+              { metric: "avg", xAxisKey: "step" },
+              { metric: "rolling_avg", xAxisKey: "step" },
+            ],
             path: streamUrl,
             clean: cleanData,
           },
@@ -62,7 +80,7 @@ export function App() {
       <div className="relative grid w-full max-w-7xl gap-6">
         {metrics.map((metric) => (
           <MetricCardFromSource
-            key={`${metric.path}:${metric.metricKey}`}
+            key={`${metric.path}:${metric.dataKey}`}
             definition={metric}
           />
         ))}

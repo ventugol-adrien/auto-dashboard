@@ -8,7 +8,8 @@ export const qualifiedName: Record<string, string> = {
   pect: "Percentile",
   min: "Minimum",
   max: "Maximum",
+  sum: "Sum",
   t: "Total",
   tm: "Time",
-  count: "Count",
+  count: "No.",
 };
