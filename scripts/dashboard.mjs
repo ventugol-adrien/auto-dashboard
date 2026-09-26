@@ -180,7 +180,9 @@ if (production) {
 
 const electronProcess = spawn(
   electron,
-  ["."],
+  process.platform === "linux"
+    ? ["--gtk-version=3", "--ozone-platform=x11", "."]
+    : ["."],
   {
     cwd: projectRoot,
     stdio: "inherit",
