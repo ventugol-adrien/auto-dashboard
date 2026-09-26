@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 
 import { spawn } from "node:child_process";
-import { access } from "node:fs/promises";
+import { createWriteStream } from "node:fs";
+import { access, mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
@@ -9,15 +11,16 @@ import electron from "electron";
 import { createServer } from "vite";
 
 const usage = `Usage:
+  dashboard [--production] -d <key> [-m <metric...> [-x <key>] [-s <style>]...] [-d ...] -p <source>
   npm run dashboard -- -d <key> [-m <metric...> [-x <key>] [-s <style>]...] [-d ...] -p <source>
-  npm run dashboard:prod -- -d <key> [-m <metric...> [-x <key>] [-s <style>]...] [-d ...] -p <source>
+  npm run dashboard:dev -- -d <key> [-m <metric...> [-x <key>] [-s <style>]...] [-d ...] -p <source>
 
 Options:
   -d, --data-key     Numeric data field; starts a new dashboard card
   -m, --metric       Metric(s): _, avg, rolling_avg, sum, std, var, med, min, max, dist, or count
   -x, --x-axis-key   Optional X-axis field for the preceding metric list
   -s, --style        Chart style for the preceding metric list: bar or line
-  -p, --path         Local JSONL path or HTTP(S) SSE URL
+  -p, --path         Local JSONL path, - for stdin, or HTTP(S) SSE URL
       --production   Load the built dist artifacts without a Vite server
   -h, --help         Show this help message`;
 
@@ -132,10 +135,23 @@ if (!inputPath || cards.length === 0 || cards.some(({ charts }) => charts.length
   process.exit(1);
 }
 
+const isStdinSource = inputPath === "-";
 const isRemoteSource = /^https?:\/\//i.test(inputPath);
-const source = isRemoteSource ? inputPath : path.resolve(inputPath);
+let stdinTempDir;
+let stdinStream;
+let source;
 
-if (!isRemoteSource) {
+if (isStdinSource) {
+  stdinTempDir = await mkdtemp(path.join(os.tmpdir(), "auto-dashboard-"));
+  source = path.join(stdinTempDir, "stdin.jsonl");
+  await writeFile(source, "");
+  stdinStream = createWriteStream(source, { flags: "a" });
+  process.stdin.pipe(stdinStream);
+} else {
+  source = isRemoteSource ? inputPath : path.resolve(inputPath);
+}
+
+if (!isRemoteSource && !isStdinSource) {
   try {
     await access(source);
   } catch {
@@ -201,7 +217,7 @@ const electronProcess = spawn(
 console.log(
   `Dashboard: ${cards.map(({ dataKey, charts }) => `${dataKey} (${charts.map(({ metric, xAxisKey }) => xAxisKey ? `${metric} by ${xAxisKey}` : metric === "_" ? "raw value" : `${metric} value`).join(", ")})`).join("; ")}`,
 );
-console.log(`Source: ${source}`);
+console.log(`Source: ${isStdinSource ? "stdin" : source}`);
 console.log(`Renderer: ${devServerUrl ?? "dist/index.html"}`);
 
 let closing = false;
@@ -210,6 +226,10 @@ const close = async (exitCode = 0) => {
   if (closing) return;
   closing = true;
   await server?.close();
+  stdinStream?.destroy();
+  if (stdinTempDir) {
+    await rm(stdinTempDir, { recursive: true, force: true });
+  }
   process.exitCode = exitCode;
 };
 

@@ -8,61 +8,92 @@ keys, calculations, x-axes, and chart styles from the CLI.
 
 - A current Node.js LTS release
 - npm
-- A local JSONL file or HTTP(S) SSE endpoint
+- A local JSONL file, stdin JSONL stream, or HTTP(S) SSE endpoint
 
 ## Installation
 
-```powershell
+```bash
 npm install
 ```
+
+To use the `dashboard` command directly without installing the package
+globally, create a symlink in a directory on your `PATH`:
+
+```bash
+mkdir -p "$HOME/.local/bin"
+ln -sf "$PWD/scripts/dashboard.mjs" "$HOME/.local/bin/dashboard"
+```
+
+The symlink is optional; the `npm run` commands work without it.
 
 ## Quick Start
 
 Launch a local file with Vite HMR:
 
-```powershell
-npm run dashboard -- -d loss -m _ avg rolling_avg -x step -p .\src\assets\data\example.jsonl
+```bash
+npm run dashboard:dev -- -d loss -m _ avg rolling_avg -x step -p src/assets/data/example.jsonl
+```
+
+Build the renderer and launch the production dashboard:
+
+```bash
+npm run dashboard:build -- -d loss -m avg -x step -p src/assets/data/example.jsonl
+```
+
+After running `npm run build`, the production command can also be launched
+directly through the local `dashboard` symlink:
+
+```bash
+dashboard --production -d loss -m avg -x step -p src/assets/data/example.jsonl
 ```
 
 Show only the latest raw value for a data key:
 
-```powershell
-npm run dashboard -- -d epoch -p .\src\assets\data\example.jsonl
-```
-
-Build and launch the production renderer with a local file:
-
-```powershell
-npm run dashboard:prod -- -d loss -m avg -x step -p .\src\assets\data\example.jsonl
-```
-
-Build and launch the production renderer with a remote SSE endpoint:
-
-```powershell
-npm run dashboard:prod -- -d loss -m avg -x step -p "https://example.com/logs/run-id"
+```bash
+npm run dashboard:dev -- -d epoch -p src/assets/data/example.jsonl
 ```
 
 Render multiple calculations for one data key and x-axis:
 
-```powershell
-npm run dashboard:prod -- -d loss -m _ avg rolling_avg -x step -p .\src\assets\data\example.jsonl
+```bash
+dashboard --production -d loss -m _ avg rolling_avg -x step -p src/assets/data/example.jsonl
 ```
 
 Add cards and assign different x-axes to their selected calculations:
 
-```powershell
-npm run dashboard:prod -- -d power_usage_w -m avg rolling_avg -x timestamp -d vram_used_gb -m avg rolling_avg -x timestamp -m dist -x vram_used_gb -p .\run.jsonl
+```bash
+dashboard --production -d power_usage_w -m avg rolling_avg -x timestamp -d vram_used_gb -m avg rolling_avg -x timestamp -m dist -x vram_used_gb -p ./run.jsonl
 ```
 
 Override the default chart style for a metric group:
 
-```powershell
-npm run dashboard:prod -- -d loss -m avg rolling_avg -x step -s bar -p .\src\assets\data\example.jsonl
+```bash
+dashboard --production -d loss -m avg rolling_avg -x step -s bar -p src/assets/data/example.jsonl
 ```
 
-The production command builds the renderer and loads `dist/index.html`
-directly in Electron. It does not keep a Vite server running. This produces a
-production renderer, not an installable Electron package.
+Launch a remote Server-Sent Events source:
+
+```bash
+dashboard --production -d loss -m avg -x step -p "https://example.com/logs/run-id"
+```
+
+Read JSONL records from stdin. The dashboard starts immediately and updates as
+records arrive:
+
+```bash
+tail -f training.jsonl | dashboard --production -d loss -m avg -x step -p -
+```
+
+For a finite stream, pipe a file directly:
+
+```bash
+cat src/assets/data/example.jsonl | npm run dashboard:dev -- -d loss -m avg -x step -p -
+```
+
+`npm run dashboard:build` builds the renderer before launching. The direct
+`dashboard --production` and `npm run dashboard` commands expect `dist/` to
+already exist. The development command uses Vite HMR and does not require a
+prior build.
 
 ## CLI Options
 
@@ -72,21 +103,22 @@ production renderer, not an installable Electron package.
 | `--metric`     | `-m`  | No       | Calculation(s) to display.                               |
 | `--x-axis-key` | `-x`  | No       | X-axis for the preceding metric list.                    |
 | `--style`      | `-s`  | No       | Override the metric list's chart style: `bar` or `line`. |
-| `--path`       | `-p`  | Yes      | Local JSONL path or HTTP(S) SSE URL.                     |
+| `--path`       | `-p`  | Yes      | Local JSONL path, `-` for stdin, or HTTP(S) SSE URL.     |
 | `--help`       | `-h`  | No       | Print command usage.                                     |
 
-Run `npm run dashboard -- --help` for the CLI reference.
+Run `dashboard --help`, `npm run dashboard -- --help`, or
+`npm run dashboard:dev -- --help` for the CLI reference.
 
 Local paths are resolved relative to the current directory. Quote paths that
 contain spaces:
 
-```powershell
-npm run dashboard:prod -- -d loss -m avg -x step -p "C:\Training Runs\run-01.jsonl"
+```bash
+dashboard --production -d loss -m avg -x step -p "/path/to/Training Runs/run-01.jsonl"
 ```
 
 ## Data Format
 
-Local sources must contain one JSON object per line:
+Local files and stdin sources must contain one JSON object per line:
 
 ```jsonl
 {"event":"train_step","step":1,"loss":1.0001,"epoch":1}
@@ -153,6 +185,10 @@ the main process rereads the file and sends a complete snapshot through the
 isolated preload bridge. The renderer parses the JSONL and retains at most the
 latest 1,000 records by default.
 
+For stdin paths (`-p -`), the launcher writes incoming bytes to a temporary
+JSONL file, which Electron watches like any other local source. The temporary
+file is removed when the dashboard exits.
+
 For HTTP(S) paths, `useStream` opens an `EventSource` and appends incoming SSE
 messages to the same bounded buffer. The endpoint must permit the Electron
 renderer origin through its CORS policy when applicable.
@@ -164,8 +200,10 @@ pages cannot access `fs.watch`.
 
 | Command                               | Description                                          |
 | ------------------------------------- | ---------------------------------------------------- |
-| `npm run dashboard -- <options>`      | Launch Electron with Vite HMR.                       |
-| `npm run dashboard:prod -- <options>` | Build and launch Electron from `dist`.               |
+| `dashboard <options>`                 | Launch the CLI directly; add `--production` for `dist`. |
+| `npm run dashboard -- <options>`      | Launch production Electron from `dist`.              |
+| `npm run dashboard:dev -- <options>`  | Launch Electron with Vite HMR.                       |
+| `npm run dashboard:build -- <options>`| Build and launch production Electron.               |
 | `npm run dev`                         | Start the browser-only Vite development server.      |
 | `npm run build`                       | Type-check and create production renderer artifacts. |
 | `npm run preview`                     | Preview production artifacts through Vite.           |
@@ -218,11 +256,12 @@ and allows the Electron renderer through CORS.
 
 ### Local updates do not appear in a browser tab
 
-Live local updates require Electron. Use `npm run dashboard` or
-`npm run dashboard:prod`; browser-only Vite performs a one-time fetch.
+Live local updates require Electron. Use `npm run dashboard:dev`,
+`npm run dashboard`, or the `dashboard` command; browser-only Vite performs a
+one-time fetch.
 
 ### Port 5173 is already in use
 
-`npm run dashboard` selects an available port automatically. The legacy
+`npm run dashboard:dev` selects an available port automatically. The legacy
 `electron:dev` script expects port 5173 and may require stopping the process
 already using it.
